@@ -7,25 +7,46 @@ type URLStore struct {
 	mu   sync.RWMutex
 }
 
+func NewURLStore() *URLStore {
+	return &URLStore{urls: make(map[string]string)}
+}
+
 func (s *URLStore) Get(key string) string {
 	s.mu.RLock() // multiple go routines can read at a time but only one go routine can write at a time
-	url := s.urls[key]
-	s.mu.Unlock()
-	return url
+	defer s.mu.RUnlock()
+	return s.urls[key]
 }
 
 func (s *URLStore) Set(key, url string) bool {
 	s.mu.Lock() // only one go routine can write at a time
-	
+	defer s.mu.Unlock()
+
 	_, present := s.urls[key]
 	if present {
-		s.mu.Unlock()
 		return false
 	} else {
 		s.urls[key] = url
-		s.mu.Unlock()
 		return true
 	}
+}
+
+func (s *URLStore) Count() int {
+	s.mu.RUnlock()
+	defer s.mu.RUnlock()
+	return len(s.urls)
+}
+
+func (s *URLStore) Put(url string) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for {
+		key := genKey(s.Count())
+		if s.Set(key, url) {
+			return key
+		}
+	}
+
+	return ""
 }
 
 func main() {
