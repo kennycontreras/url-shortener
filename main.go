@@ -1,54 +1,49 @@
 package main
 
-import "sync"
+import (
+	"fmt"
+	"log"
+	"net/http"
+)
 
-type URLStore struct {
-	urls map[string]string
-	mu   sync.RWMutex
-}
+const AddForm = `
+<html><body>
+<form method="POST" action="/add">
+URL: <input type="text" name="url">
+<input type="submit" value="Add">
+</form>
+<\html><\body>`
 
-func NewURLStore() *URLStore {
-	return &URLStore{urls: make(map[string]string)}
-}
-
-func (s *URLStore) Get(key string) string {
-	s.mu.RLock() // multiple go routines can read at a time but only one go routine can write at a time
-	defer s.mu.RUnlock()
-	return s.urls[key]
-}
-
-func (s *URLStore) Set(key, url string) bool {
-	s.mu.Lock() // only one go routine can write at a time
-	defer s.mu.Unlock()
-
-	_, present := s.urls[key]
-	if present {
-		return false
-	} else {
-		s.urls[key] = url
-		return true
-	}
-}
-
-func (s *URLStore) Count() int {
-	s.mu.RUnlock()
-	defer s.mu.RUnlock()
-	return len(s.urls)
-}
-
-func (s *URLStore) Put(url string) string {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	for {
-		key := genKey(s.Count())
-		if s.Set(key, url) {
-			return key
-		}
-	}
-
-	return ""
-}
+var store = NewURLStore()
 
 func main() {
+	http.HandleFunc("/", Redirect)
+	http.HandleFunc("/add", Add)
+	//http.ListenAndServe("8080", nil)
+	err := http.ListenAndServe(":8080", nil)
+	if err != nil {
+		log.Fatalf("ListenAndServe: %v", err)
+	}
+}
 
+func Add(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html")
+	url := r.FormValue("url")
+	if url == "" {
+		fmt.Fprintf(w, AddForm)
+		return
+	}
+	key := store.Put(url)
+
+	fmt.Fprintf(w, "URL %s added with key %s", url, key)
+}
+
+func Redirect(w http.ResponseWriter, r *http.Request) {
+	key := r.URL.Path[1:]
+	url := store.Get(key)
+	if url == "" {
+		http.NotFound(w, r)
+		return
+	}
+	http.Redirect(w, r, url, http.StatusFound)
 }
