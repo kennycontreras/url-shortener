@@ -29,7 +29,7 @@ func (s *URLStore) Set(key, url string) bool {
 }
 
 func (s *URLStore) Count() int {
-	s.mu.RUnlock()
+	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return len(s.urls)
 }
