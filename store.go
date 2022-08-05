@@ -21,12 +21,10 @@ type record struct {
 func NewURLStore(filename string) *URLStore {
 	s := &URLStore{urls: make(map[string]string)}
 	f, err := os.OpenFile(filename, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
-	if err != nil {
-		log.Fatalf("OpenFile: %v", err)
-	}
+	HandleError(err)
 	s.file = f
 	if err := s.load(); err != nil {
-		log.Fatalf("Error loading data in URLStore: %v", err)
+		log.Printf("Error loading data in URLStore: %v", err)
 	}
 	return s
 }
@@ -79,20 +77,14 @@ func (s *URLStore) load() error {
 
 	d := gob.NewDecoder(s.file)
 	var err error
-	for err == nil { // read until EOF
+	for err == nil {
 		var r record
 		if err = d.Decode(&r); err == nil {
 			s.Set(r.Key, r.URL)
 		}
 	}
-
 	if err == io.EOF {
 		return nil
 	}
-
-	if err != nil {
-		log.Fatalf("Error load() function: %v", err)
-	}
-
 	return err
 }

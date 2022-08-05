@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"net/http"
 )
 
@@ -21,9 +20,7 @@ func main() {
 	http.HandleFunc("/", Redirect)
 	http.HandleFunc("/add", Add)
 	err := http.ListenAndServe(":8080", nil)
-	if err != nil {
-		log.Fatalf("ListenAndServe: %v", err)
-	}
+	HandleError(err)
 }
 
 func Add(w http.ResponseWriter, r *http.Request) {
