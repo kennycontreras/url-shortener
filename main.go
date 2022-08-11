@@ -20,7 +20,7 @@ func main() {
 	http.HandleFunc("/", Redirect)
 	http.HandleFunc("/add", Add)
 	err := http.ListenAndServe(":8080", nil)
-	HandleError(err)
+	FatalHandleError(err)
 }
 
 func Add(w http.ResponseWriter, r *http.Request) {

@@ -2,16 +2,18 @@ package main
 
 import (
 	"encoding/gob"
+	"fmt"
 	"io"
-	"log"
 	"os"
 	"sync"
 )
 
+const saveQueueLength = 1000
+
 type URLStore struct {
 	urls map[string]string
 	mu   sync.RWMutex
-	file *os.File
+	save chan record
 }
 
 type record struct {
@@ -19,14 +21,18 @@ type record struct {
 }
 
 func NewURLStore(filename string) *URLStore {
-	s := &URLStore{urls: make(map[string]string)}
-	f, err := os.OpenFile(filename, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
-	HandleError(err)
-	s.file = f
-	if err := s.load(); err != nil {
-		log.Printf("Error loading data in URLStore: %v", err)
+	s := &URLStore{
+		urls: make(map[string]string),
+		save: make(chan record, saveQueueLength),
 	}
+
+	if err := s.load(filename); err != nil {
+		fmt.Errorf("error loading %s: %v", filename, err)
+	}
+
+	go s.saveLoop(filename)
 	return s
+
 }
 
 func (s *URLStore) Get(key string) string {
@@ -56,27 +62,25 @@ func (s *URLStore) Put(url string) string {
 	for {
 		key := genKey(s.Count()) // generate short url
 		if s.Set(key, url) {
-			if err := s.save(key, url); err != nil {
-				log.Fatalf("Error saving data in URLStore: %v", err)
-			}
+			s.save <- record{key, url} // save to go routine
 			return key
 		}
 	}
 	panic("unreachable")
 }
 
-func (s *URLStore) save(key, url string) error {
-	e := gob.NewEncoder(s.file)
-	return e.Encode(record{key, url})
-}
+func (s *URLStore) load(filename string) error {
 
-func (s *URLStore) load() error {
-	if _, err := s.file.Seek(0, 0); err != nil {
+	f, err := os.Open(filename)
+	if err != nil {
+		PrintHandleError(err)
 		return err
 	}
 
-	d := gob.NewDecoder(s.file)
-	var err error
+	defer f.Close()
+
+	d := gob.NewDecoder(f)
+
 	for err == nil {
 		var r record
 		if err = d.Decode(&r); err == nil {
@@ -86,5 +90,20 @@ func (s *URLStore) load() error {
 	if err == io.EOF {
 		return nil
 	}
+
+	PrintHandleError(err)
 	return err
+}
+
+func (s *URLStore) saveLoop(filename string) {
+	f, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
+	FatalHandleError(err)
+
+	defer f.Close()
+	e := gob.NewEncoder(f) // return a encoder to io.Writer
+	for {
+		r := <-s.save // taking a record from the channel and encoding it to the file
+		PrintHandleError(e.Encode(r))
+	}
+
 }
