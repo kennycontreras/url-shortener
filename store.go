@@ -1,8 +1,7 @@
 package main
 
 import (
-	//	"bufio"
-	"encoding/gob"
+	"encoding/json"
 	"io"
 	"log"
 	"os"
@@ -72,7 +71,7 @@ func (s *URLStore) load(filename string) error {
 		return err
 	}
 	defer f.Close()
-	d := gob.NewDecoder(f)
+	d := json.NewDecoder(f)
 	for err == nil {
 		var r record
 		if err = d.Decode(&r); err == nil {
@@ -93,7 +92,7 @@ func (s *URLStore) saveLoop(filename string) {
 		log.Fatal("Error opening URLStore: ", err)
 	}
 	defer f.Close()
-	e := gob.NewEncoder(f)
+	e := json.NewEncoder(f)
 	for {
 		r := <-s.save // takes a record from the channel
 		if err := e.Encode(r); err != nil {
